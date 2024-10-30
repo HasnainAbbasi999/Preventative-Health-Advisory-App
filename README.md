@@ -8,7 +8,7 @@ This Streamlit-based application provides preventative health advice customized 
 - **Interactive Interface**: User-friendly Streamlit interface for quick input and immediate feedback.
 
 ## Dataset
-The dataset, `Patients Data ( Used for Heart Disease Prediction ).xlsx`, is included in this repository and contains information on:
+The dataset, `Patients Data ( Used for Heart Disease Prediction ).xlsx`, is used from kaggle and contains information on:
 - Demographic details: Age, sex, and state
 - Health conditions: Heart disease, stroke, diabetes, asthma, and more
 - Lifestyle choices: Smoking, alcohol consumption, vaccination status
