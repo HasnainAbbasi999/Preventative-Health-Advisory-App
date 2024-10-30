@@ -7,8 +7,10 @@ from groq import Groq
 import requests
 
 # Function to download the dataset from Google Drive
-def download_file_from_google_drive(file_id, destination):
-    download_url = f"https://drive.google.com/uc?id={file_id}"
+def download_file_from_google_drive(gdrive_url, destination):
+    # Extract the file ID from the Google Drive URL
+    file_id = gdrive_url.split('/')[-2]
+    download_url = f"https://docs.google.com/spreadsheets/d/1SVw3RQPFj9GoZv8k3gonQLV53CU3gJB4/edit?usp=sharing&ouid=117493145663431274877&rtpof=true&sd=true"
     
     # Download the file
     with requests.get(download_url) as response:
@@ -16,18 +18,18 @@ def download_file_from_google_drive(file_id, destination):
         with open(destination, "wb") as f:
             f.write(response.content)
 
-# Google Drive file ID for the dataset
-FILE_ID = "1SVw3RQPFj9GoZv8k3gonQLV53CU3gJB4"
+# Google Drive link to the dataset
+DATA_URL = "https://docs.google.com/spreadsheets/d/1SVw3RQPFj9GoZv8k3gonQLV53CU3gJB4/edit?usp=drive_link"
 DATA_PATH = "Patients Data ( Used for Heart Disease Prediction ).xlsx"
 
 # Check if the dataset file exists, if not, download it
 if not os.path.exists(DATA_PATH):
     with st.spinner("Downloading dataset..."):
-        download_file_from_google_drive(FILE_ID, DATA_PATH)
+        download_file_from_google_drive(DATA_URL, DATA_PATH)
         st.success("Dataset downloaded successfully!")
 
-# Load the dataset, specifying the engine
-data = pd.read_excel(DATA_PATH, engine='openpyxl')
+# Load the dataset
+data = pd.read_excel(DATA_PATH)
 
 # Initialize Groq client using the API key from Streamlit secrets
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
