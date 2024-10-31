@@ -1,68 +1,56 @@
 import streamlit as st
 import pandas as pd
 import requests
-from io import BytesIO
-from zipfile import BadZipFile
-from groq import Groq
+import zipfile
+import io
+import os
 
-# Constants for the data source
-DATA_URL = "https://docs.google.com/spreadsheets/d/1SVw3RQPFj9GoZv8k3gonQLV53CU3gJB4/edit?gid=1666265732#gid=1666265732"  # replace with your data URL
-DATA_PATH = "data.xlsx"
+# URL to the zip file on Google Drive
+ZIP_URL = "https://drive.google.com/uc?id=1hwqrnxy7b8wvn4mZBkscjklDHzQum9Wh"
+EXTRACTED_FILE_NAME = "Patients Data ( Used for Heart Disease Prediction ).xlsx"
 
-# Download the dataset
-def download_data(url, save_path):
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(save_path, "wb") as f:
-            f.write(response.content)
-        st.success("Dataset downloaded successfully!")
-    else:
-        st.error("Failed to download dataset.")
+# Function to download and extract the zip file
+def download_and_extract_zip(url):
+    st.write("Downloading and extracting data...")
+    try:
+        # Download the zip file
+        response = requests.get(url)
+        if response.status_code == 200:
+            with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+                # Extract the specified file
+                z.extract(EXTRACTED_FILE_NAME)
+            st.success("Dataset downloaded and extracted successfully!")
+        else:
+            st.error("Failed to download the file. Check the URL.")
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
 
-# Download and save dataset locally if not present
-try:
-    st.write("Downloading data...")
-    download_data(DATA_URL, DATA_PATH)
-except Exception as e:
-    st.error(f"An error occurred while downloading the data: {e}")
+# Call the function to download and extract the data
+download_and_extract_zip(ZIP_URL)
 
-# Load the dataset
-try:
-    data = pd.read_excel(DATA_PATH, engine='openpyxl')
-except BadZipFile:
-    st.error("The downloaded file is not a valid Excel file. Please check the file format or the URL.")
-except FileNotFoundError:
-    st.error("File not found. Ensure that the data download step completed successfully.")
-except Exception as e:
-    st.error(f"An error occurred while loading the dataset: {e}")
-else:
+# Check if the file was extracted successfully, then load the dataset
+if os.path.exists(EXTRACTED_FILE_NAME):
+    data = pd.read_excel(EXTRACTED_FILE_NAME, engine='openpyxl')
     st.write("Data preview:")
-    st.write(data.head())
+    st.dataframe(data.head())
+else:
+    st.error("The downloaded file is not available. Please check the file format or the URL.")
 
-# Initialize Groq client using the API key from Streamlit secrets
-try:
-    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-except KeyError:
-    st.error("Groq API key not found in Streamlit secrets. Please add it before proceeding.")
-except Exception as e:
-    st.error(f"An error occurred while initializing the Groq client: {e}")
+# Rest of the app functionality: form inputs and health advisory
+st.title("Health Advisory App")
 
-# Sample Streamlit form for data input and processing
-with st.form("input_form"):
-    age = st.number_input("Enter your age", min_value=0, max_value=120)
-    gender = st.selectbox("Select your gender", ["Male", "Female", "Other"])
-    submit = st.form_submit_button("Submit")
+# Collect user input
+age = st.number_input("Enter your age", min_value=0, max_value=120)
+gender = st.selectbox("Select your gender", ["Male", "Female", "Other"])
 
-    if submit:
-        st.write(f"Input data - Age: {age}, Gender: {gender}")
-        
-        # Example usage of Groq client with user inputs
-        try:
-            response = client.query(f'SELECT * FROM health_data WHERE age = {age} AND gender = "{gender}"')
-            st.write("Groq query result:")
-            st.write(response)
-        except Exception as e:
-            st.error(f"An error occurred while querying Groq: {e}")
+# Display entered details and provide an advisory message
+if st.button("Submit"):
+    st.write("Thank you for using the Health Advisory App!")
+    st.write(f"Your age: {age}")
+    st.write(f"Your gender: {gender}")
+    # Example advisory based on entered data
+    if age > 40:
+        st.warning("Consider regular check-ups for preventive health.")
+    else:
+        st.info("Maintain a balanced diet and stay active!")
 
-# Any additional Streamlit functionalities
-st.write("Thank you for using the Health Advisory App!")
