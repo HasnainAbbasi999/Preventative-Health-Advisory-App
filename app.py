@@ -6,7 +6,7 @@ from zipfile import BadZipFile
 from groq import Groq
 
 # Constants for the data source
-DATA_URL = "https://example.com/path/to/your/data.xlsx"  # replace with your data URL
+DATA_URL = "https://docs.google.com/spreadsheets/d/1SVw3RQPFj9GoZv8k3gonQLV53CU3gJB4/edit?usp=drive_link&ouid=117493145663431274877&rtpof=true&sd=true"  # replace with your data URL
 DATA_PATH = "data.xlsx"
 
 # Download the dataset
