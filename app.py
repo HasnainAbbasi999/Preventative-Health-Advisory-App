@@ -1,50 +1,92 @@
-import streamlit as st
-import pandas as pd
-import requests
-import zipfile
 import os
+import zipfile
+import pandas as pd
+import streamlit as st
+from groq import Groq
 
-# Constants for the URL and file paths
-DATA_URL = "https://drive.google.com/uc?id=1hwqrnxy7b8wvn4mZBkscjklDHzQum9Wh"
-ZIP_FILE_NAME = "data.zip"
-EXTRACTED_FILE_NAME = "Patients Data ( Used for Heart Disease Prediction ).xlsx"
+# Load the Groq API Key from Streamlit secrets
+api_key = st.secrets["GROQ_API_KEY"]
 
-# Function to download the zip file
-def download_data(url, filename):
-    response = requests.get(url)
-    response.raise_for_status()
-    with open(filename, "wb") as f:
-        f.write(response.content)
+# Define the path to the zip file and the extraction directory
+zip_file_path = "Patients Data ( Used for Heart Disease Prediction ).zip"
+extract_path = "data"
 
-# Function to unzip the file
-def unzip_file(zip_path, extract_to="."):
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_to)
+# Create a directory for extracted data if it doesn't exist
+os.makedirs(extract_path, exist_ok=True)
 
-# Download the zip file if not already present
-if not os.path.exists(ZIP_FILE_NAME):
-    st.write("Downloading and extracting data...")
-    try:
-        download_data(DATA_URL, ZIP_FILE_NAME)
-        unzip_file(ZIP_FILE_NAME)
-        st.success("Dataset downloaded and extracted successfully!")
-    except Exception as e:
-        st.error("An error occurred: " + str(e))
+# Unzip the dataset if the Excel file doesn't already exist
+if not any(file.endswith('.xlsx') for file in os.listdir(extract_path)):
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_path)
 
-# Load the extracted Excel file
-try:
-    data = pd.read_excel(EXTRACTED_FILE_NAME, engine="openpyxl")
-    st.write("Data Sample:")
-    st.write(data.head())
-except FileNotFoundError:
-    st.error("The extracted file was not found. Please ensure the file URL is correct.")
-except Exception as e:
-    st.error("An error occurred while loading the data: " + str(e))
+# Load the dataset (assuming the Excel file is the first one in the extracted folder)
+excel_file_name = os.listdir(extract_path)[0]  # Assuming there's only one Excel file
+excel_file_path = os.path.join(extract_path, excel_file_name)
+data = pd.read_excel(excel_file_path)
 
-# Add input fields for user data
-st.header("Preventative Health Advisory App")
-age = st.number_input("Enter your age", min_value=0, max_value=120, step=1)
-gender = st.selectbox("Select your gender", ["Male", "Female", "Other"])
+# Initialize Groq client
+client = Groq(api_key=api_key)
 
-# Additional app logic or advisory generation would go here
-st.write("Thank you for using the Health Advisory App!")
+# Define a function to preprocess patient data and retrieve context
+def get_patient_context(age_category, smoker_status, health_conditions):
+    """
+    Retrieve relevant patient data based on age, smoker status, and health conditions.
+    Returns a summary of similar patients' characteristics and recommendations.
+    """
+    # Filter data by age category and smoker status
+    similar_patients = data[(data["AgeCategory"] == age_category) &
+                            (data["SmokerStatus"] == smoker_status)]
+
+    # Further filter by health conditions if any
+    for condition, has_condition in health_conditions.items():
+        if has_condition:
+            similar_patients = similar_patients[similar_patients[condition] == 1]
+
+    # Summarize relevant context
+    context_summary = similar_patients.describe(include='all').to_string()
+    return context_summary
+
+# Define the RAG function to generate health advice
+def get_preventative_health_advice(age_category, smoker_status, health_conditions):
+    """
+    Generates personalized preventative health advice by querying the LLM.
+    """
+    # Retrieve relevant context from patient data
+    context = get_patient_context(age_category, smoker_status, health_conditions)
+
+    # Create the prompt for the LLM
+    prompt = f"""
+    Based on the following patient context:
+    {context}
+
+    What preventative health measures should a patient in the {age_category} age group with a
+    smoker status of '{smoker_status}' and the specified health conditions take?
+    Provide advice on lifestyle changes, screening tests, and vaccination recommendations.
+    """
+
+    # Query the Groq LLM
+    chat_completion = client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model="llama3-8b-8192",
+    )
+
+    # Extract and return the generated content
+    return chat_completion.choices[0].message.content
+
+# Streamlit UI
+st.title("Preventative Health Advisory App")
+
+age_category = st.selectbox("Select Age Category", ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
+smoker_status = st.selectbox("Select Smoker Status", ["Current Smoker", "Former Smoker", "Never Smoked"])
+
+# Define health conditions
+health_conditions = {
+    "HadHeartAttack": st.checkbox("Had a Heart Attack"),
+    "HadStroke": st.checkbox("Had a Stroke"),
+    "HadDiabetes": st.checkbox("Had Diabetes"),
+}
+
+if st.button("Get Health Advice"):
+    advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
+    st.subheader("Preventative Health Advice:")
+    st.write(advice)
