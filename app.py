@@ -27,12 +27,8 @@ data = pd.read_excel(excel_file_path)
 # Initialize Groq client
 client = Groq(api_key=api_key)
 
-# Define a function to preprocess patient data and retrieve context
+# Function to preprocess patient data and retrieve context
 def get_patient_context(age_category, smoker_status, health_conditions):
-    """
-    Retrieve relevant patient data based on age, smoker status, and health conditions.
-    Returns a summary of similar patients' characteristics and recommendations.
-    """
     # Filter data by age category and smoker status
     similar_patients = data[(data["AgeCategory"] == age_category) &
                             (data["SmokerStatus"] == smoker_status)]
@@ -46,11 +42,8 @@ def get_patient_context(age_category, smoker_status, health_conditions):
     context_summary = similar_patients.describe(include='all').to_string()
     return context_summary
 
-# Define the RAG function to generate health advice
+# Function to generate health advice
 def get_preventative_health_advice(age_category, smoker_status, health_conditions):
-    """
-    Generates personalized preventative health advice by querying the LLM.
-    """
     # Retrieve relevant context from patient data
     context = get_patient_context(age_category, smoker_status, health_conditions)
 
@@ -93,8 +86,13 @@ if 'advice' not in st.session_state:
 
 # Button for submission
 if st.button("Get Health Advice"):
+    # Reset advice to None each time before generating new advice
+    st.session_state.advice = None
     with st.spinner("Processing..."):
-        st.session_state.advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
+        try:
+            st.session_state.advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
 
 # Display the advice if available
 if st.session_state.advice:
