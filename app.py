@@ -4,31 +4,34 @@ import pandas as pd
 import streamlit as st
 from groq import Groq
 
-# Load the Groq API Key from Streamlit secrets
-api_key = st.secrets["GROQ_API_KEY"]
+# Load the Groq API key from Streamlit secrets
+API_KEY = st.secrets["GROQ_API_KEY"]
 
-# Define the path to the zip file and the extraction directory
-zip_file_path = "Patients Data ( Used for Heart Disease Prediction ).zip"
-extract_path = "data"
+# Function to load dataset from ZIP file
+@st.cache_data
+def load_data():
+    zip_path = "Patients Data ( Used for Heart Disease Prediction ).zip"
+    xlsx_filename = "Patients Data ( Used for Heart Disease Prediction ).xlsx"
+    
+    # Extract and load the Excel file
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extract(xlsx_filename)
+    data = pd.read_excel(xlsx_filename)
+    
+    return data
 
-# Create a directory for extracted data if it doesn't exist
-os.makedirs(extract_path, exist_ok=True)
-
-# Unzip the dataset if the Excel file doesn't already exist
-if not any(file.endswith('.xlsx') for file in os.listdir(extract_path)):
-    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_path)
-
-# Load the dataset (assuming the Excel file is the first one in the extracted folder)
-excel_file_name = os.listdir(extract_path)[0]  # Assuming there's only one Excel file
-excel_file_path = os.path.join(extract_path, excel_file_name)
-data = pd.read_excel(excel_file_path)
+# Load data
+data = load_data()
 
 # Initialize Groq client
-client = Groq(api_key=api_key)
+client = Groq(api_key=API_KEY)
 
-# Function to preprocess patient data and retrieve context
+# Define a function to preprocess patient data and retrieve context
 def get_patient_context(age_category, smoker_status, health_conditions):
+    """
+    Retrieve relevant patient data based on age, smoker status, and health conditions.
+    Returns a summary of similar patients' characteristics and recommendations.
+    """
     # Filter data by age category and smoker status
     similar_patients = data[(data["AgeCategory"] == age_category) &
                             (data["SmokerStatus"] == smoker_status)]
@@ -42,8 +45,11 @@ def get_patient_context(age_category, smoker_status, health_conditions):
     context_summary = similar_patients.describe(include='all').to_string()
     return context_summary
 
-# Function to generate health advice
+# Define the RAG function to generate health advice
 def get_preventative_health_advice(age_category, smoker_status, health_conditions):
+    """
+    Generates personalized preventative health advice by querying the LLM.
+    """
     # Retrieve relevant context from patient data
     context = get_patient_context(age_category, smoker_status, health_conditions)
 
@@ -59,7 +65,9 @@ def get_preventative_health_advice(age_category, smoker_status, health_condition
 
     # Query the Groq LLM
     chat_completion = client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
         model="llama3-8b-8192",
     )
 
@@ -69,32 +77,22 @@ def get_preventative_health_advice(age_category, smoker_status, health_condition
 # Streamlit UI
 st.title("Preventative Health Advisory App")
 
-# Create placeholders for user input
-age_category = st.selectbox("Select Age Category", ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
-smoker_status = st.selectbox("Select Smoker Status", ["Current Smoker", "Former Smoker", "Never Smoked"])
+# User input for age category
+age_category = st.selectbox("Select Age Category:", options=["18-34", "35-44", "45-54", "55-64", "65+"])
 
-# Define health conditions
+# User input for smoker status
+smoker_status = st.selectbox("Select Smoker Status:", options=["Current Smoker", "Former Smoker", "Never Smoked"])
+
+# User input for health conditions
+st.subheader("Select Health Conditions:")
 health_conditions = {
-    "HadHeartAttack": st.checkbox("Had a Heart Attack"),
-    "HadStroke": st.checkbox("Had a Stroke"),
+    "HadHeartAttack": st.checkbox("Had Heart Attack"),
+    "HadStroke": st.checkbox("Had Stroke"),
     "HadDiabetes": st.checkbox("Had Diabetes"),
 }
 
-# Initialize a session state variable to store advice
-if 'advice' not in st.session_state:
-    st.session_state.advice = None
-
-# Button for submission
+# Button to get health advice
 if st.button("Get Health Advice"):
-    # Reset advice to None each time before generating new advice
-    st.session_state.advice = None
-    with st.spinner("Processing..."):
-        try:
-            st.session_state.advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-
-# Display the advice if available
-if st.session_state.advice:
+    advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
     st.subheader("Preventative Health Advice:")
-    st.write(st.session_state.advice)
+    st.write(advice)
