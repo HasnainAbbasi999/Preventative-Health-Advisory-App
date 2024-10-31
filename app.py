@@ -76,6 +76,7 @@ def get_preventative_health_advice(age_category, smoker_status, health_condition
 # Streamlit UI
 st.title("Preventative Health Advisory App")
 
+# Create placeholders for user input
 age_category = st.selectbox("Select Age Category", ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
 smoker_status = st.selectbox("Select Smoker Status", ["Current Smoker", "Former Smoker", "Never Smoked"])
 
@@ -86,7 +87,16 @@ health_conditions = {
     "HadDiabetes": st.checkbox("Had Diabetes"),
 }
 
+# Initialize a session state variable to store advice
+if 'advice' not in st.session_state:
+    st.session_state.advice = None
+
+# Button for submission
 if st.button("Get Health Advice"):
-    advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
+    with st.spinner("Processing..."):
+        st.session_state.advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
+
+# Display the advice if available
+if st.session_state.advice:
     st.subheader("Preventative Health Advice:")
-    st.write(advice)
+    st.write(st.session_state.advice)
