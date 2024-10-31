@@ -1,75 +1,68 @@
-# app.py
-
-import os
-import pandas as pd
 import streamlit as st
-from groq import Groq
+import pandas as pd
 import requests
+from io import BytesIO
+from zipfile import BadZipFile
+from groq import Groq
 
-# Function to download the dataset from Google Drive
-def download_file_from_google_drive(file_id, destination):
-    download_url = f"https://drive.google.com/uc?id={file_id}"
-    
-    # Download the file
-    with requests.get(download_url) as response:
-        response.raise_for_status()  # Raise an error for bad responses
-        with open(destination, "wb") as f:
+# Constants for the data source
+DATA_URL = "https://example.com/path/to/your/data.xlsx"  # replace with your data URL
+DATA_PATH = "data.xlsx"
+
+# Download the dataset
+def download_data(url, save_path):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(save_path, "wb") as f:
             f.write(response.content)
-
-# Google Drive file ID for the dataset
-FILE_ID = "1SVw3RQPFj9GoZv8k3gonQLV53CU3gJB4"
-DATA_PATH = "Patients Data ( Used for Heart Disease Prediction ).xlsx"
-
-# Check if the dataset file exists, if not, download it
-if not os.path.exists(DATA_PATH):
-    with st.spinner("Downloading dataset..."):
-        download_file_from_google_drive(FILE_ID, DATA_PATH)
         st.success("Dataset downloaded successfully!")
+    else:
+        st.error("Failed to download dataset.")
 
-# Load the dataset, specifying the engine
-data = pd.read_excel(DATA_PATH, engine='openpyxl')
+# Download and save dataset locally if not present
+try:
+    st.write("Downloading data...")
+    download_data(DATA_URL, DATA_PATH)
+except Exception as e:
+    st.error(f"An error occurred while downloading the data: {e}")
+
+# Load the dataset
+try:
+    data = pd.read_excel(DATA_PATH, engine='openpyxl')
+except BadZipFile:
+    st.error("The downloaded file is not a valid Excel file. Please check the file format or the URL.")
+except FileNotFoundError:
+    st.error("File not found. Ensure that the data download step completed successfully.")
+except Exception as e:
+    st.error(f"An error occurred while loading the dataset: {e}")
+else:
+    st.write("Data preview:")
+    st.write(data.head())
 
 # Initialize Groq client using the API key from Streamlit secrets
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+try:
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except KeyError:
+    st.error("Groq API key not found in Streamlit secrets. Please add it before proceeding.")
+except Exception as e:
+    st.error(f"An error occurred while initializing the Groq client: {e}")
 
-# Function to retrieve patient context based on filters
-def get_patient_context(age_category, smoker_status, health_conditions):
-    similar_patients = data[(data["AgeCategory"] == age_category) & 
-                            (data["SmokerStatus"] == smoker_status)]
-    for condition, has_condition in health_conditions.items():
-        if has_condition:
-            similar_patients = similar_patients[similar_patients[condition] == 1]
-    context_summary = similar_patients.describe(include='all').to_string()
-    return context_summary
+# Sample Streamlit form for data input and processing
+with st.form("input_form"):
+    age = st.number_input("Enter your age", min_value=0, max_value=120)
+    gender = st.selectbox("Select your gender", ["Male", "Female", "Other"])
+    submit = st.form_submit_button("Submit")
 
-# Function to generate preventative health advice
-def get_preventative_health_advice(age_category, smoker_status, health_conditions):
-    context = get_patient_context(age_category, smoker_status, health_conditions)
-    prompt = f"""
-    Based on the following patient context:
-    {context}
+    if submit:
+        st.write(f"Input data - Age: {age}, Gender: {gender}")
+        
+        # Example usage of Groq client with user inputs
+        try:
+            response = client.query(f'SELECT * FROM health_data WHERE age = {age} AND gender = "{gender}"')
+            st.write("Groq query result:")
+            st.write(response)
+        except Exception as e:
+            st.error(f"An error occurred while querying Groq: {e}")
 
-    What preventative health measures should a patient in the {age_category} age group with a 
-    smoker status of '{smoker_status}' and the specified health conditions take?
-    Provide advice on lifestyle changes, screening tests, and vaccination recommendations.
-    """
-    
-    chat_completion = client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="llama3-8b-8192",
-    )
-    return chat_completion.choices[0].message.content
-
-# Streamlit UI for the app
-st.title("Preventative Health Advisory System")
-
-age_category = st.selectbox("Select Age Category:", options=data["AgeCategory"].unique())
-smoker_status = st.selectbox("Smoker Status:", options=data["SmokerStatus"].unique())
-health_conditions = {cond: st.checkbox(cond) for cond in [
-    "HadHeartAttack", "HadStroke", "HadDiabetes"
-]}
-
-if st.button("Get Health Advice"):
-    advice = get_preventative_health_advice(age_category, smoker_status, health_conditions)
-    st.write("**Health Advice:**")
-    st.write(advice)
+# Any additional Streamlit functionalities
+st.write("Thank you for using the Health Advisory App!")
